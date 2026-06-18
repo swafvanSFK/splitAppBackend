@@ -10,7 +10,15 @@ router.get('/user/:userId', async (req, res) => {
     
     // Using include since User and Group have a Many-to-Many relationship through UserGroup
     const user = await User.findByPk(userId, {
-      include: [{ model: Group, through: { attributes: [] } }]
+      include: [{ 
+        model: Group, 
+        through: { attributes: [] },
+        include: [{
+          model: User,
+          attributes: ['id', 'name', 'email'],
+          through: { attributes: [] }
+        }]
+      }]
     });
 
     if (!user) {
@@ -103,7 +111,7 @@ router.post('/', async (req, res) => {
     // Generate a random 6-character alphanumeric invite code
     const invite_code = crypto.randomBytes(3).toString('hex').toUpperCase();
 
-    const group = await Group.create({ name, invite_code });
+    const group = await Group.create({ name, invite_code, admin_user_id: user_id });
 
     // Automatically add the creator to the group
     if (user_id) {
@@ -113,7 +121,16 @@ router.post('/', async (req, res) => {
       });
     }
 
-    res.status(201).json({ message: 'Group created', group });
+    // Eager-load users so frontend has the members list immediately
+    const freshGroup = await Group.findByPk(group.id, {
+      include: [{
+        model: User,
+        attributes: ['id', 'name', 'email'],
+        through: { attributes: [] }
+      }]
+    });
+
+    res.status(201).json({ message: 'Group created', group: freshGroup });
   } catch (error) {
     console.error('Error creating group:', error);
     res.status(500).json({ error: 'Failed to create group' });
@@ -144,10 +161,101 @@ router.post('/join', async (req, res) => {
       group_id: group.id
     });
 
-    res.status(200).json({ message: 'Joined group successfully', group });
+    // Eager-load users so frontend has the members list immediately
+    const freshGroup = await Group.findByPk(group.id, {
+      include: [{
+        model: User,
+        attributes: ['id', 'name', 'email'],
+        through: { attributes: [] }
+      }]
+    });
+
+    res.status(200).json({ message: 'Joined group successfully', group: freshGroup });
   } catch (error) {
     console.error('Error joining group:', error);
     res.status(500).json({ error: 'Failed to join group' });
+  }
+});
+
+// PUT /api/groups/:groupId - Edit room name (Admin only)
+router.put('/:groupId', async (req, res) => {
+  const { groupId } = req.params;
+  const { name, userId } = req.body;
+
+  if (!name || !userId) {
+    return res.status(400).json({ error: 'Missing room name or user ID' });
+  }
+
+  try {
+    const group = await Group.findByPk(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    if (group.admin_user_id !== userId) {
+      return res.status(403).json({ error: 'Only the room admin is allowed to rename it.' });
+    }
+
+    await group.update({ name });
+
+    // Eager-load users so frontend has the updated members list
+    const freshGroup = await Group.findByPk(group.id, {
+      include: [{
+        model: User,
+        attributes: ['id', 'name', 'email'],
+        through: { attributes: [] }
+      }]
+    });
+
+    res.json({ message: 'Room renamed successfully', group: freshGroup });
+  } catch (error) {
+    console.error('Error updating group name:', error);
+    res.status(500).json({ error: 'Failed to rename room' });
+  }
+});
+
+// DELETE /api/groups/:groupId - Delete room and all its details (Admin only)
+router.delete('/:groupId', async (req, res) => {
+  const { groupId } = req.params;
+  const { userId } = req.body || {}; // Allow from body
+
+  // Also support reading from headers or query parameters if body is not parsed
+  const requesterId = userId || req.query.userId || req.headers['x-user-id'];
+
+  if (!requesterId) {
+    return res.status(400).json({ error: 'Requester User ID is required' });
+  }
+
+  try {
+    const group = await Group.findByPk(groupId);
+    if (!group) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
+
+    if (group.admin_user_id !== requesterId) {
+      return res.status(403).json({ error: 'Only the room admin is allowed to delete it.' });
+    }
+
+    const { Expense, ExpenseSplit } = require('../models');
+
+    // 1. Delete splits
+    const expenses = await Expense.findAll({ where: { group_id: groupId } });
+    const expenseIds = expenses.map(e => e.id);
+    await ExpenseSplit.destroy({ where: { expense_id: expenseIds } });
+    
+    // 2. Delete expenses
+    await Expense.destroy({ where: { group_id: groupId } });
+    
+    // 3. Delete user groups memberships
+    await UserGroup.destroy({ where: { group_id: groupId } });
+    
+    // 4. Finally delete group
+    await group.destroy();
+
+    res.json({ message: 'Room deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting group:', error);
+    res.status(500).json({ error: 'Failed to delete room' });
   }
 });
 

@@ -35,8 +35,17 @@ app.get('/', (req, res) => {
 
 // Sync database and start server
 sequelize.sync({ force: false }) // Set to true to drop tables on restart
-  .then(() => {
+  .then(async () => {
     console.log('Database synced successfully.');
+    
+    // Check and create the column dynamically to prevent Sequelize sync mismatch in existing environments
+    try {
+      await sequelize.query('ALTER TABLE "Group" ADD COLUMN IF NOT EXISTS "admin_user_id" UUID;');
+      console.log('Group table admin_user_id column verified.');
+    } catch (queryErr) {
+      console.warn('Failed to add admin_user_id column dynamically:', queryErr.message);
+    }
+
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}.`);
     });

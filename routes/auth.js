@@ -191,4 +191,26 @@ router.post('/apple', async (req, res) => {
   }
 });
 
+// PUT /api/auth/update - Update user name
+router.put('/update', async (req, res) => {
+  const { userId, name } = req.body;
+
+  if (!userId || !name) {
+    return res.status(400).json({ error: 'User ID and name are required' });
+  }
+
+  try {
+    const user = await User.findByPk(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await user.update({ name });
+    res.json({ message: 'User updated successfully', user: { id: user.id, name: user.name, email: user.email } });
+  } catch (error) {
+    console.error('Error updating user name:', error);
+    res.status(500).json({ error: 'Failed to update name' });
+  }
+});
+
 module.exports = router;

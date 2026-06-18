@@ -15,6 +15,10 @@ module.exports = (sequelize) => {
       type: DataTypes.STRING,
       allowNull: false,
       unique: true,
+    },
+    admin_user_id: {
+      type: DataTypes.UUID,
+      allowNull: true,
     }
   }, {
     freezeTableName: true,
