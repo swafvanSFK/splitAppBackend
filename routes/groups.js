@@ -171,6 +171,22 @@ router.post('/join', async (req, res) => {
     });
 
     res.status(200).json({ message: 'Joined group successfully', group: freshGroup });
+
+    // Trigger Notification asynchronously
+    try {
+      const { sendGroupNotification } = require('../utils/notificationHelper');
+      const newUser = await User.findByPk(user_id);
+      const newUserName = newUser ? newUser.name : 'Someone';
+      sendGroupNotification(
+        group.id,
+        user_id,
+        'MEMBER_JOINED',
+        'New Member Joined',
+        `${newUserName} joined the room "${group.name}"`
+      );
+    } catch (notifErr) {
+      console.error('Notification trigger error:', notifErr);
+    }
   } catch (error) {
     console.error('Error joining group:', error);
     res.status(500).json({ error: 'Failed to join group' });

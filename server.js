@@ -21,12 +21,14 @@ const dashboardRouter = require('./routes/dashboard');
 const settlementsRouter = require('./routes/settlements');
 const groupsRouter = require('./routes/groups');
 const authRouter = require('./routes/auth');
+const notificationsRouter = require('./routes/notifications');
 
 app.use('/api/expenses', expensesRouter);
 app.use('/api/dashboard', dashboardRouter);
 app.use('/api/settlements', settlementsRouter);
 app.use('/api/groups', groupsRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/notifications', notificationsRouter);
 
 // Basic health check endpoint
 app.get('/', (req, res) => {
@@ -42,8 +44,35 @@ sequelize.sync({ force: false }) // Set to true to drop tables on restart
     try {
       await sequelize.query('ALTER TABLE "Group" ADD COLUMN IF NOT EXISTS "admin_user_id" UUID;');
       console.log('Group table admin_user_id column verified.');
+      
+      // Dynamically verify Notification and PushToken tables
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS "Notification" (
+          "id" UUID PRIMARY KEY,
+          "user_id" UUID NOT NULL REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+          "group_id" UUID REFERENCES "Group"("id") ON DELETE SET NULL ON UPDATE CASCADE,
+          "type" VARCHAR(255) NOT NULL,
+          "title" VARCHAR(255) NOT NULL,
+          "message" TEXT NOT NULL,
+          "is_read" BOOLEAN NOT NULL DEFAULT FALSE,
+          "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+          "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL
+        );
+      `);
+      console.log('Notification table verified.');
+
+      await sequelize.query(`
+        CREATE TABLE IF NOT EXISTS "PushToken" (
+          "id" UUID PRIMARY KEY,
+          "user_id" UUID NOT NULL REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE,
+          "token" VARCHAR(255) UNIQUE NOT NULL,
+          "createdAt" TIMESTAMP WITH TIME ZONE NOT NULL,
+          "updatedAt" TIMESTAMP WITH TIME ZONE NOT NULL
+        );
+      `);
+      console.log('PushToken table verified.');
     } catch (queryErr) {
-      console.warn('Failed to add admin_user_id column dynamically:', queryErr.message);
+      console.warn('Failed to verify table schemas dynamically:', queryErr.message);
     }
 
     app.listen(PORT, () => {

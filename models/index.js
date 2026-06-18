@@ -18,6 +18,8 @@ const UserGroup = require('./UserGroup')(sequelize);
 const Expense = require('./Expense')(sequelize);
 const ExpenseSplit = require('./ExpenseSplit')(sequelize);
 const Settlement = require('./Settlement')(sequelize);
+const Notification = require('./Notification')(sequelize);
+const PushToken = require('./PushToken')(sequelize);
 
 // Associations
 User.belongsToMany(Group, { through: UserGroup, foreignKey: 'user_id' });
@@ -44,6 +46,15 @@ Settlement.belongsTo(User, { foreignKey: 'from_user_id', as: 'Debtor' });
 User.hasMany(Settlement, { foreignKey: 'to_user_id', as: 'SettlementsToReceive' });
 Settlement.belongsTo(User, { foreignKey: 'to_user_id', as: 'Creditor' });
 
+User.hasMany(Notification, { foreignKey: 'user_id' });
+Notification.belongsTo(User, { foreignKey: 'user_id' });
+
+Group.hasMany(Notification, { foreignKey: 'group_id' });
+Notification.belongsTo(Group, { foreignKey: 'group_id' });
+
+User.hasMany(PushToken, { foreignKey: 'user_id' });
+PushToken.belongsTo(User, { foreignKey: 'user_id' });
+
 module.exports = {
   sequelize,
   User,
@@ -52,4 +63,6 @@ module.exports = {
   Expense,
   ExpenseSplit,
   Settlement,
+  Notification,
+  PushToken,
 };

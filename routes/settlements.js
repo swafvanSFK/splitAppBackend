@@ -101,6 +101,25 @@ router.post('/pay', async (req, res) => {
     });
 
     res.status(201).json({ message: 'Payment recorded successfully' });
+
+    // Trigger Notification asynchronously
+    try {
+      const { sendGroupNotification } = require('../utils/notificationHelper');
+      const payer = await User.findByPk(payer_id);
+      const payee = await User.findByPk(payee_id);
+      const payerName = payer ? payer.name : 'Someone';
+      const payeeName = payee ? payee.name : 'someone';
+      
+      sendGroupNotification(
+        groupId,
+        payer_id,
+        'SETTLEMENT_PAID',
+        'Debt Settled Up',
+        `${payerName} paid AED ${parseFloat(amount).toFixed(2)} to ${payeeName}`
+      );
+    } catch (notifErr) {
+      console.error('Notification trigger error:', notifErr);
+    }
   } catch (error) {
     console.error('Error recording payment:', error);
     res.status(500).json({ error: 'Failed to record payment' });

@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const multer = require('multer');
 const path = require('path');
-const { Expense, ExpenseSplit } = require('../models');
+const { Expense, ExpenseSplit, User } = require('../models');
+const { sendGroupNotification } = require('../utils/notificationHelper');
 
 // Configure multer storage
 const storage = multer.diskStorage({
@@ -52,6 +53,21 @@ router.post('/', upload.single('receipt'), async (req, res) => {
     }
 
     res.status(201).json({ message: 'Expense added successfully', expense });
+
+    // Trigger Notification asynchronously
+    try {
+      const payer = await User.findByPk(paid_by_user_id);
+      const payerName = payer ? payer.name : 'Someone';
+      sendGroupNotification(
+        group_id,
+        paid_by_user_id,
+        'EXPENSE_ADDED',
+        'New Expense Added',
+        `${payerName} added a new expense of AED ${parseFloat(amount).toFixed(2)}: "${description || category}"`
+      );
+    } catch (notifErr) {
+      console.error('Notification trigger error:', notifErr);
+    }
   } catch (error) {
     console.error('Error adding expense:', error);
     res.status(500).json({ error: 'Failed to add expense' });
